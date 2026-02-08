@@ -6,15 +6,15 @@ on:
       ANDROID_NDK:
         description: "Android NDK"
         required: true
-        default: 'r29'
+        default: 'r27'
       ANDROID_ABI:
         description: "Android ABI"
         required: true
-        default: '21'
+        default: '24'
       ENABLED_DECODERS:
         description: "Enabled FFmpeg decoder"
         required: true
-        default: 'vorbis opus flac alac pcm_mulaw pcm_alaw mp3 amrnb amrwb aac ac3 eac3 dca mlp truehd'
+        default: 'aac mp3 ac3 eac3 dca alac flac opus vorbis pcm_alaw pcm_mulaw pcm_s16le pcm_s24le pcm_f32le wmav1 wmav2 dsd_lsbf dsd_msbf dsd_lsbf_planar dsd_msbf_planar'
       FFMPEG_BRANCH:
         description: "FFmpeg branch"
         required: true
