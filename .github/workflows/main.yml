@@ -1,0 +1,121 @@
+name: Build media3 FFmpeg decoder
+
+on:
+  workflow_dispatch:
+    inputs:
+      ANDROID_NDK:
+        description: "Android NDK"
+        required: true
+        default: 'r27'
+      ANDROID_ABI:
+        description: "Android ABI"
+        required: true
+        default: '24'
+      ENABLED_DECODERS:
+        description: "Enabled FFmpeg decoder"
+        required: true
+        default: 'aac mp3 ac3 eac3 dca alac flac opus vorbis pcm_alaw pcm_mulaw pcm_s16le pcm_s24le pcm_f32le wmav1 wmav2 dsd_lsbf dsd_msbf dsd_lsbf_planar dsd_msbf_planar'
+      FFMPEG_BRANCH:
+        description: "FFmpeg branch"
+        required: true
+        default: 'release/7.1'
+      MEDIA3_BRANCH:
+        description: "media3 branch"
+        required: true
+        default: 'release'
+      FFMPEG_ENABLE_GPL:
+        description: "Enable FFmpeg GPL"
+        required: true
+        default: false
+        type: boolean
+      FFMPEG_ENABLE_VERSION_3:
+        description: "Enable FFmpeg (L)GPL version 3"
+        required: true
+        default: false
+        type: boolean
+      FFMEPG_ENABLE_NONFREE:
+        description: "Enable FFmpeg nonfree"
+        required: true
+        default: false
+        type: boolean
+      LIBPOSTPROC_REMOVED:
+        description: "libpostproc removed (FFmpeg 8.0+)"
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout media3 repository
+        uses: actions/checkout@v6
+        with:
+          repository: androidx/media
+          ref: ${{ github.event.inputs.MEDIA3_BRANCH }}
+          path: media
+
+      - name: Checkout FFmpeg repository
+        uses: actions/checkout@v6
+        with:
+          repository: FFmpeg/FFmpeg
+          ref: ${{ github.event.inputs.FFMPEG_BRANCH }}
+          path: media/libraries/decoder_ffmpeg/src/main/jni/ffmpeg
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: 17
+          distribution: temurin
+          check-latest: true
+
+      - name: Setup Android NDK
+        run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-${{ github.event.inputs.ANDROID_NDK }}-linux.zip
+          unzip android-ndk-${{ github.event.inputs.ANDROID_NDK }}-linux.zip &>/dev/null
+          rm -rf android-ndk-${{ github.event.inputs.ANDROID_NDK }}-linux.zip
+
+      - name: Build FFmpeg jni
+        run: |
+          FFMPEG_MODULE_PATH="$GITHUB_WORKSPACE"/media/libraries/decoder_ffmpeg/src/main
+          NDK_PATH="$GITHUB_WORKSPACE"/android-ndk-${{ github.event.inputs.ANDROID_NDK }}
+          HOST_PLATFORM="linux-x86_64"
+          ANDROID_ABI=${{ github.event.inputs.ANDROID_ABI }}
+          ENABLED_DECODERS=(${{ github.event.inputs.ENABLED_DECODERS }})
+          cd "${FFMPEG_MODULE_PATH}/jni"
+          if [ ${{ github.event.inputs.FFMPEG_ENABLE_GPL }} == true ]; then
+            sed -i '/--disable-vulkan/a\    --enable-gpl' build_ffmpeg.sh
+          fi
+          if [ ${{ github.event.inputs.FFMPEG_ENABLE_VERSION_3 }} == true ]; then
+            sed -i '/--disable-vulkan/a\    --enable-version3' build_ffmpeg.sh
+          fi
+          if [ ${{ github.event.inputs.FFMEPG_ENABLE_NONFREE }} == true ]; then
+            sed -i '/--disable-vulkan/a\    --enable-nonfree' build_ffmpeg.sh
+          fi
+          if [ ${{ github.event.inputs.LIBPOSTPROC_REMOVED }} == true ]; then
+            sed -i '/--disable-postproc/d' build_ffmpeg.sh
+          fi
+          ./build_ffmpeg.sh "${FFMPEG_MODULE_PATH}" "${NDK_PATH}" "${HOST_PLATFORM}" "${ANDROID_ABI}" "${ENABLED_DECODERS[@]}"
+
+      - name: Build FFmpeg aar
+        run: |
+          ./gradlew lib-decoder-ffmpeg:assembleRelease
+        working-directory: media
+
+      - name: Upload FFmpeg jni
+        uses: actions/upload-artifact@v6
+        with:
+          name: FFmpeg-jni
+          path: |
+            media/libraries/decoder_ffmpeg/src/main/jni/ffmpeg/android-libs/*
+          compression-level: 9
+
+      - name: Upload FFmpeg aar
+        uses: actions/upload-artifact@v6
+        with:
+          name: FFmpeg-aar
+          path: |
+            media/libraries/decoder_ffmpeg/buildout/outputs/aar/*
+          compression-level: 9
